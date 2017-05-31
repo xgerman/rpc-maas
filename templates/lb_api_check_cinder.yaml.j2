@@ -20,6 +20,6 @@ alarms            :
         disabled            : {{ ('lb_api_alarm_cinder' | match(maas_excluded_alarms_regex)) | ternary('true', 'false') }}
         criteria            : |
             :set consecutiveCount={{ maas_alarm_local_consecutive_count }}
-            if (metric['code'] != '200') {
+            if (metric['code'] != '200' && metric['code'] != '300') {
                 return new AlarmStatus(CRITICAL, 'API unavailable.');
             }

@@ -6,8 +6,8 @@ period      : "{{ maas_check_period_override[label] | default(maas_check_period)
 timeout     : "{{ maas_check_timeout_override[label] | default(maas_check_timeout) }}"
 disabled    : "{{ (check_name | match(maas_excluded_checks_regex)) | ternary('true', 'false') }}"
 details     :
-    file    : disk_utilisation.py
-    args    : ["{{ ansible_ssh_host }}"]
+    file    : run_plugin_in_venv.sh
+    args    : ["{{ maas_plugin_dir }}disk_utilisation.py", "{{ ansible_ssh_host }}"]
 alarms      :
 {% for device in disk_util_devices %}
     percentage_disk_utilisation_{{ device }}:
@@ -16,7 +16,10 @@ alarms      :
         disabled                : {{ (('percentage_disk_utilisation_'+device+'--'+ansible_hostname) | match(maas_excluded_alarms_regex)) | ternary('true', 'false') }}
         criteria                : |
             :set consecutiveCount={{ maas_alarm_local_consecutive_count }}
-            if (metric["disk_utilisation_{{ device }}"] > {{ disk_utilisation_threshold }}) {
-                return new AlarmStatus(CRITICAL, "Disk IO utilisation for {{ device }} >= {{ disk_utilisation_threshold }}%");
+            if (metric["disk_utilisation_{{ device }}"] > {{ disk_utilisation_critical_threshold }}) {
+                return new AlarmStatus(CRITICAL, "Disk IO utilisation for {{ device }} >= {{ disk_utilisation_critical_threshold }}%");
+            }
+            if (metric["disk_utilisation_{{ device }}"] > {{ disk_utilisation_warning_threshold }}) {
+                return new AlarmStatus(WARNING, "Disk IO utilisation for {{ device }} >= {{ disk_utilisation_warning_threshold }}%");
             }
 {% endfor %}

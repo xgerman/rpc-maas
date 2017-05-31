@@ -275,10 +275,12 @@ cinder_volumes_vg_critical_threshold: 90.0
 cinder_vg_name: "{{ cinder_backends['lvm']['volume_group'] }}"
 
 # MaaS CPU idle threshold
-cpu_idle_percent_avg_threshold: 10.0
+cpu_idle_percent_avg_warning_threshold: 10.0
+cpu_idle_percent_avg_critical_threshold: 1.0
 
 # MaaS Memory in use threshold
-memory_used_percentage_threshold: 95.0
+memory_used_percentage_warning_threshold: 90.0
+memory_used_percentage_critical_threshold: 99.0
 
 # Set the threshold for the "Max Channels per Connection" Rabbitmq alarm
 rabbitmq_max_channels_per_con_threshold: 10
@@ -292,13 +294,12 @@ rabbitmq_queue_growth_rate_threshold: 15
 
 
 # Set the threshold for the "Disk utilisation" MaaS alarms
-disk_utilisation_threshold: 90
-
-# Set the container storage threshold
-percent_used_critical_threshold: 85
+disk_utilisation_warning_threshold: 90
+disk_utilisation_critical_threshold: 99
 
 # nf_conntrack threshold
-nf_conntrack_threshold: 90
+nf_conntrack_warning_threshold: 80
+nf_conntrack_critical_threshold: 90
 
 # net_max_speed has units of Mb/s, set to null for auto discovery
 net_max_speed: null
@@ -356,20 +357,21 @@ rsyslogd_process_names:
   - rsyslogd
 
 elasticsearch_process_names:
-  # NOTE(cjloader): Unlike rsyslog and beaver, elasticsearch does not have a
+  # NOTE(cjloader): Unlike rsyslog and filebeat, elasticsearch does not have a
   # process name that includes "elasticsearch". The process running
   # elasticsearch is actually named "java" so we search for that here. This is
   # less than ideal, but the best we can do right now.
   - java
 
-beaver_process_names:
-  - beaver
+filebeat_process_names:
+  - filebeat
 
 swift_object_process_names:
   - swift-object-server
   - swift-object-replicator
   - swift-object-updater
   - swift-object-auditor
+  - swift-object-expirer
 
 swift_account_process_names:
   - swift-account-server
@@ -386,7 +388,7 @@ swift_container_process_names:
 process_checks_list:
   - { name: "rsyslogd_process_check", group: "rsyslog_all" }
   - { name: "elasticsearch_process_check", group: "elasticsearch_all" }
-  - { name: "beaver_process_check", group: "all" }
+  - { name: "filebeat_process_check", group: "all" }
   - { name: "swift_object_process_check", group: "swift_obj" }
   - { name: "swift_account_process_check", group: "swift_acc" }
   - { name: "swift_container_process_check", group: "swift_cont" }
@@ -425,7 +427,7 @@ openstack_service_local_checks_list:
   - { name: "nova_conductor_check", group: "nova_conductor" }
   - { name: "nova_scheduler_check", group: "nova_scheduler" }
   - { name: "nova_consoleauth_check", group: "nova_console" }
-  - { name: "nova_spice_console_check", group: "nova_console" }
+  - { name: "nova_console_check", group: "nova_console" }
   - { name: "nova_cloud_stats_check", group: "nova_api_os_compute" }
 
 cinder_vg_checks_list:
@@ -494,15 +496,22 @@ maas_apt_packages:
   - mariadb-client
 
 #
+# maas_requires_pip_packages: Pip packages needed outside the virtualenv
+#
+maas_requires_pip_packages:
+  - virtualenv
+
+#
 # maas_pip_packages: Packages we need but are not built by openstack-ansible
 #
 maas_pip_packages:
   - ipaddr
   - lxc-python2
-  - apache-libcloud<2.0.0
   - psutil
+  - apache-libcloud<2.0.0
   - rackspace-monitoring-cli
   - swift
+  - waxeye
 
 #
 # maas_pip_dependencies: These are pip packages we depend on, but should already be built in
@@ -559,6 +568,11 @@ maas_check_timeout_override: {}
 # This is necessary until LP #1537117 is implemented
 openrc_os_endpoint_type: internalURL
 openrc_insecure: "{{ (keystone_service_adminuri_insecure | bool or keystone_service_internaluri_insecure | bool) | default(false) }}"
+# Name of the virtual env to deploy into (maas)
+maas_venv: "/openstack/venvs/maas-{{ rpc_release }}"
+maas_venv_bin: "{{ maas_venv }}/bin"
+# Set this to enable or disable installing in a venv
+maas_venv_enabled: true
 
 #
 # Default horizon site name
@@ -570,6 +584,22 @@ horizon_site_name: "openstack dashboard"
 #                             cinder-backup service should be deployed
 #
 maas_monitor_cinder_backup: false
+
+#
+# verify_maas_delay: How long to wait between failures if there is one
+#
+verify_maas_delay: 20
+
+#
+# verify_maas_retries: How many times to retry on failure
+#
+verify_maas_retries: 5
+
+#
+# maas_use_api: Allow operations that make use of the MaaS api, set to false
+#               for offline testing
+#
+maas_use_api: true
 
 #
 # maas_agent_upgrade: Allow for automatic MaaS agent upgrades
